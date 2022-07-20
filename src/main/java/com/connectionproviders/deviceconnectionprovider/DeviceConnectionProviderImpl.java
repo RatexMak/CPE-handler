@@ -47,7 +47,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
     private static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs)
 	    throws IOException, InterruptedException, JSchException {
-	LOGGER.debug("sendReceive() method invoked");
+	LOGGER.info("sendReceive() method invoked");
 	String response = "";
 
 	conn.send(command, (int) (timeOutMilliSecs));
@@ -76,7 +76,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return SSH connection
      */
     public Connection getConnection(Device device) {
-	LOGGER.debug("getConnection method invoked ");
+	LOGGER.info("getConnection method invoked ");
 	Connection conn = new SshConnection(device.getHostIpAddress());
 	return conn;
     }
@@ -90,7 +90,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, String command) {
 	String response = "";
-	LOGGER.debug("execute method invoked with device,command: " + command);
+	LOGGER.info("execute method invoked with device,command: " + command);
 	SshConnection conn = new SshConnection(device.getHostIpAddress());
 	try {
 	    response = sendReceive(conn, command, defaultTimeout);
@@ -102,7 +102,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    }
 	}
 
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
@@ -119,7 +119,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	SshConnection conn = new SshConnection(device.getHostIpAddress());
 
 	for (String idx : commandList) {
-	    LOGGER.debug("execute method invoked with device,commandList: " + idx);
+	    LOGGER.info("execute method invoked with device,commandList: " + idx);
 	    try {
 		response = sendReceive(conn, idx, defaultTimeout);
 	    } catch (Exception ex) {
@@ -136,7 +136,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    conn.disconnect();
 	}
 
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
@@ -154,7 +154,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	SshConnection conn = new SshConnection(device.getHostIpAddress());
 
 	for (String idx : commandList) {
-	    LOGGER.debug("execute method invoked with device,executeCommandType, commandList: " + idx);
+	    LOGGER.info("execute method invoked with device,executeCommandType, commandList: " + idx);
 	    try {
 		switch (executeCommandType) {
 		case REV_SSH_DEVICE_VERIFY: {
@@ -193,7 +193,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    conn.disconnect();
 	}
 
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response.toString();
     }
@@ -209,7 +209,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Dut dut, String command, String expectStr, String[] options) {
 	String response = "";
-	LOGGER.debug("execute method invoked with device,command, expectStr and options: " + command);
+	LOGGER.info("execute method invoked with device,command, expectStr and options: " + command);
 	SshConnection conn = new SshConnection(dut.getHostIpAddress());
 
 	try {
@@ -222,7 +222,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    }
 	}
 
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
@@ -251,7 +251,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, String command, DeviceConsoleType consoleType, long timeOutMilliSecs) {
 	String response = "";
-	LOGGER.debug("execute method invoked with device,command, consoleType and timeout: " + command);
+	LOGGER.info("execute method invoked with device,command, consoleType and timeout: " + command);
 	SshConnection conn = new SshConnection(device.getHostIpAddress());
 	try {
 	    switch (consoleType) {
@@ -273,7 +273,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 		conn.disconnect();
 	    }
 	}
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
@@ -287,7 +287,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, List<String> commandList, DeviceConsoleType consoleType) {
-	LOGGER.debug("execute method invoked with device,commandList, consoleType ");
+	LOGGER.info("execute method invoked with device,commandList, consoleType ");
 	String response = "";
 	SshConnection conn = new SshConnection(device.getHostIpAddress());
 
@@ -318,7 +318,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    conn.disconnect();
 	}
 
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
@@ -334,7 +334,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, List<String> commandList, DeviceConsoleType consoleType,
 	    long timeOutMilliSecs) {
-	LOGGER.debug("execute method invoked with device,commandList, consoleType, timeOut");
+	LOGGER.info("execute method invoked with device,commandList, consoleType, timeOut");
 	String response = "";
 	SshConnection conn = new SshConnection(device.getHostIpAddress());
 
@@ -365,7 +365,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    conn.disconnect();
 	}
 
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
@@ -379,7 +379,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, Connection deviceConnnection, String command) {
-	LOGGER.debug("execute method invoked with device, deviceConnnection, command");
+	LOGGER.info("execute method invoked with device, deviceConnnection, command");
 	String response = "";
 	SshConnection conn = new SshConnection(device.getHostIpAddress());
 
@@ -393,7 +393,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    }
 	}
 
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
@@ -409,7 +409,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, Connection deviceConnnection, ExecuteCommandType executeCommandType,
 	    String command) {
-	LOGGER.debug("execute method invoked with device, deviceConnnection, CommandType, command");
+	LOGGER.info("execute method invoked with device, deviceConnnection, CommandType, command");
 	String response = "";
 	SshConnection conn = new SshConnection(device.getHostIpAddress());
 
@@ -447,7 +447,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    }
 	}
 
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
@@ -475,7 +475,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(String hostIp, String command, long timeOutMilliSecs, String connectionType) {
-	LOGGER.debug("execute method invoked with hostIp " + hostIp + " " + command + " " + timeOutMilliSecs);
+	LOGGER.info("execute method invoked with hostIp " + hostIp + " " + command + " " + timeOutMilliSecs);
 	String response = "";
 	SshConnection conn = new SshConnection(hostIp);
 
@@ -488,7 +488,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 		conn.disconnect();
 	    }
 	}
-	LOGGER.debug("Received response: " + response);
+	LOGGER.info("Received response: " + response);
 
 	return response;
     }
