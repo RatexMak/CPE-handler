@@ -69,7 +69,7 @@ public class SnmpDataProviderImpl implements SnmpDataProvider {
 
 	/* Creation of SnmpSecurityDetails Object */
 	SnmpSecurityDetails autObj = new SnmpSecurityDetails();
-	LOGGER.info(" SNMP PROVIDER " + snmpParams.getSnmpVersion());
+	LOGGER.info(" SNMP PROVIDER version" + snmpParams.getSnmpVersion());
 
 	/* Setting SNMP Port if default value is null */
 	String snmpPort = AutomaticsPropertyUtility.getProperty("snmp.port");
@@ -93,10 +93,10 @@ public class SnmpDataProviderImpl implements SnmpDataProvider {
 	 */
 	if (snmpParams.getSnmpVersion() == SnmpProtocol.SNMP_V3) {
 	    LOGGER.info(" SNMP PROVIDER V3");
-	    
+
 	    /* Get securityLevel e.g. snmp.securityLevel= authPriv */
 	    String PropSecLvl = AutomaticsPropertyUtility.getProperty("snmp.securityLevel");
-	    
+
 	    if (null == PropSecLvl) {
 		LOGGER.error("Security level is null");
 	    } else {
@@ -104,16 +104,16 @@ public class SnmpDataProviderImpl implements SnmpDataProvider {
 		autObj.setSecurityLevel(securityLevel);
 		LOGGER.info("Security level is set " + securityLevel);
 	    }
-	    
+
 	    /* Get securityName e.g. snmp.securityName= linuser */
 	    String securityName = AutomaticsPropertyUtility.getProperty("snmp.securityName");
 	    if (null == securityName) {
 		LOGGER.error("Security Name is null");
 	    } else {
 		autObj.setSecurityName(securityName);
-		LOGGER.info("Security level is set " + securityName);
+		LOGGER.info("Security name is set " + securityName);
 	    }
-	    
+
 	    /* Get securityOptions e.g. snmp.securityOptions= -a SHA -A linuserpass -x DES -X linprivpass */
 	    String securityOptions = AutomaticsPropertyUtility.getProperty("snmp.securityOptions");
 	    if (null == securityOptions) {
@@ -155,9 +155,10 @@ public class SnmpDataProviderImpl implements SnmpDataProvider {
 	if (snmpParams.getIpAddress() == null) {
 	    if (dut.getHostIpAddress() != null) {
 		snmpParams.setIpAddress(dut.getHostIpAddress());
-		LOGGER.info("Target IP is " + dut.getHostIpAddress());
+
 	    }
 	}
+	LOGGER.info("Target IP is " + dut.getHostIpAddress());
 	return snmpParams;
     }
 }

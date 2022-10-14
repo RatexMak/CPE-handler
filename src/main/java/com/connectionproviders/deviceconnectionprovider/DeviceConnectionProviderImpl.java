@@ -25,12 +25,16 @@ import java.util.List;
 
 import com.automatics.device.Device;
 import com.automatics.device.Dut;
+import com.automatics.error.GeneralError;
+import com.automatics.exceptions.FailedTransitionException;
 import com.automatics.providers.connection.Connection;
 import com.automatics.providers.connection.DeviceConnectionProvider;
 import com.automatics.providers.connection.DeviceConsoleType;
 import com.automatics.providers.connection.ExecuteCommandType;
 import com.automatics.providers.connection.SshConnection;
 import com.automatics.resource.IServer;
+import com.automatics.rpi.constants.Constants;
+import com.automatics.rpi.utils.CommonMethods;
 import com.jcraft.jsch.JSchException;
 
 /**
@@ -44,16 +48,23 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DeviceConnectionProviderImpl.class);
     private static final long defaultTimeout = 1000;
+    private static final int SSH_CONNECTION_MAX_ATTEMPT = 4;
 
-    private static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs)
-	    throws IOException, InterruptedException, JSchException {
-	LOGGER.info("sendReceive() method invoked");
+    private static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs) {
+	LOGGER.info("Executing command: " + command);
 	String response = "";
+	try {
+	    conn.send(command, (int) (timeOutMilliSecs));
+	    response = conn.getSettopResponse(timeOutMilliSecs);
+	    response = CommonMethods.removeSecurityBannerFromResponse(response);
+	    LOGGER.info("\n<===========================  RESPONSE =======================> \n" + response
+		    + "\n<=============================================================>");
+	    return response;
+	} catch (Exception ex) {
+	    LOGGER.error("Exception occurred while executing the command ", ex);
+	    throw new FailedTransitionException(GeneralError.SSH_CONNECTION_FAILURE, ex);
+	}
 
-	conn.send(command, (int) (timeOutMilliSecs));
-	response = conn.getSettopResponse(timeOutMilliSecs);
-
-	return response;
     }
 
     /**
@@ -77,7 +88,8 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public Connection getConnection(Device device) {
 	LOGGER.info("getConnection method invoked ");
-	Connection conn = new SshConnection(device.getHostIpAddress());
+	Connection conn = null;
+	conn = createSshConnection(device.getHostIpAddress());
 	return conn;
     }
 
@@ -89,22 +101,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, String command) {
-	String response = "";
-	LOGGER.info("execute method invoked with device,command: " + command);
-	SshConnection conn = new SshConnection(device.getHostIpAddress());
-	try {
-	    response = sendReceive(conn, command, defaultTimeout);
-	} catch (Exception ex) {
-	    LOGGER.error("Exception occured while sending request DUT " + ex);
-	} finally {
-	    if (null != conn) {
-		conn.disconnect();
-	    }
-	}
-
-	LOGGER.info("Received response: " + response);
-
-	return response;
+	return executeCommand(device.getHostIpAddress(), command, defaultTimeout);
     }
 
     /**
@@ -115,30 +112,25 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, List<String> commandList) {
-	String response = "";
-	SshConnection conn = new SshConnection(device.getHostIpAddress());
+	StringBuilder response = new StringBuilder();
+	SshConnection conn = null;
+	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
+	try {
+	    conn = createSshConnection(device.getHostIpAddress());
+	    for (String idx : commandList) {
+		response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
+	    }
 
-	for (String idx : commandList) {
-	    LOGGER.info("execute method invoked with device,commandList: " + idx);
-	    try {
-		response = sendReceive(conn, idx, defaultTimeout);
-	    } catch (Exception ex) {
-		LOGGER.error("Exception occured while sending request DUT " + ex);
-		if (null != conn) {
-		    conn.disconnect();
-		}
-
-		// got exception for some reason try to reconnect and try other commands
-		conn = new SshConnection(device.getHostIpAddress());
+	} finally {
+	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
+		conn.disconnect();
 	    }
 	}
-	if (null != conn) {
-	    conn.disconnect();
-	}
 
-	LOGGER.info("Received response: " + response);
+	LOGGER.info("Received response: " + response.toString());
 
-	return response;
+	return response.toString();
     }
 
     /**
@@ -150,12 +142,13 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, ExecuteCommandType executeCommandType, List<String> commandList) {
-	String response = "";
-	SshConnection conn = new SshConnection(device.getHostIpAddress());
+	StringBuilder response = new StringBuilder();
+	SshConnection conn = null;
+	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
+	try {
+	    conn = createSshConnection(device.getHostIpAddress());
+	    for (String idx : commandList) {
 
-	for (String idx : commandList) {
-	    LOGGER.info("execute method invoked with device,executeCommandType, commandList: " + idx);
-	    try {
 		switch (executeCommandType) {
 		case REV_SSH_DEVICE_VERIFY: {
 		    break;
@@ -170,30 +163,27 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 		    break;
 		}
 		case SNMP_COMMAND: {
-		    response = sendReceive(conn, idx, defaultTimeout);
+		    response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
 		    break;
 		}
 		case XCONF_CONFIG_UPDATE: {
 		    break;
 		}
 		default: {
-		    response = sendReceive(conn, idx, defaultTimeout);
+		    response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
 		}
 		}
-	    } catch (Exception ex) {
-		LOGGER.error("Exception occured while sending request DUT " + ex);
-		if (null != conn) {
-		    conn.disconnect();
-		}
-		// got exception for some reason try to reconnect and try other commands
-		conn = new SshConnection(device.getHostIpAddress());
+
+	    }
+
+	} finally {
+	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
+		conn.disconnect();
 	    }
 	}
-	if (null != conn) {
-	    conn.disconnect();
-	}
 
-	LOGGER.info("Received response: " + response);
+	LOGGER.info("Received response: " + response.toString());
 
 	return response.toString();
     }
@@ -209,15 +199,17 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Dut dut, String command, String expectStr, String[] options) {
 	String response = "";
-	LOGGER.info("execute method invoked with device,command, expectStr and options: " + command);
-	SshConnection conn = new SshConnection(dut.getHostIpAddress());
-
+	SshConnection conn = null;
+	LOGGER.info("About to create SSH connection to DutIP:" + dut.getHostIpAddress());
 	try {
+	    conn = createSshConnection(dut.getHostIpAddress());
 	    response = conn.send(command, expectStr, options);
 	} catch (Exception ex) {
-	    LOGGER.error("Exception occured while sending request DUT " + ex);
+	    LOGGER.info("Exception occurred while executing command " + ex.getMessage(), ex);
+	    throw new FailedTransitionException(GeneralError.SSH_CONNECTION_FAILURE, ex);
 	} finally {
 	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DutIP:" + dut.getHostIpAddress());
 		conn.disconnect();
 	    }
 	}
@@ -251,25 +243,27 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, String command, DeviceConsoleType consoleType, long timeOutMilliSecs) {
 	String response = "";
-	LOGGER.info("execute method invoked with device,command, consoleType and timeout: " + command);
-	SshConnection conn = new SshConnection(device.getHostIpAddress());
+	SshConnection conn = null;
+	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
 	try {
+	    conn = createSshConnection(device.getHostIpAddress());
 	    switch (consoleType) {
 	    case ARM: {
 		response = sendReceive(conn, command, timeOutMilliSecs);
 		break;
 	    }
 	    case ATOM: {
+		LOGGER.info(
+			"Implementation is not available for DeviceConsoleType: " + DeviceConsoleType.ATOM.toString());
 		break;
 	    }
 	    default: {
 		response = sendReceive(conn, command, timeOutMilliSecs);
 	    }
 	    }
-	} catch (Exception ex) {
-	    LOGGER.error("Exception occured while sending request DUT " + ex);
 	} finally {
 	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
 		conn.disconnect();
 	    }
 	}
@@ -287,40 +281,37 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, List<String> commandList, DeviceConsoleType consoleType) {
-	LOGGER.info("execute method invoked with device,commandList, consoleType ");
-	String response = "";
-	SshConnection conn = new SshConnection(device.getHostIpAddress());
 
-	for (String idx : commandList) {
-	    try {
+	StringBuilder response = new StringBuilder();
+	SshConnection conn = null;
+	LOGGER.info("About to create SSH connection to DutIP:" + device.getHostIpAddress());
+	try {
+	    conn = createSshConnection(device.getHostIpAddress());
+	    for (String idx : commandList) {
+
 		switch (consoleType) {
 		case ARM: {
-		    response = sendReceive(conn, idx, defaultTimeout);
+		    response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
 		    break;
 		}
 		case ATOM: {
 		    break;
 		}
 		default: {
-		    response = sendReceive(conn, idx, defaultTimeout);
+		    response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
 		}
 		}
-	    } catch (Exception ex) {
-		LOGGER.error("Exception occured while sending request DUT " + ex);
-		if (null != conn) {
-		    conn.disconnect();
-		}
-		// got exception for some reason try to reconnect and try
-		conn = new SshConnection(device.getHostIpAddress());
+
+	    }
+	} finally {
+	    if (null != conn) {
+		conn.disconnect();
 	    }
 	}
-	if (null != conn) {
-	    conn.disconnect();
-	}
 
-	LOGGER.info("Received response: " + response);
+	LOGGER.info("Received response: " + response.toString());
 
-	return response;
+	return response.toString();
     }
 
     /**
@@ -334,40 +325,38 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, List<String> commandList, DeviceConsoleType consoleType,
 	    long timeOutMilliSecs) {
-	LOGGER.info("execute method invoked with device,commandList, consoleType, timeOut");
-	String response = "";
-	SshConnection conn = new SshConnection(device.getHostIpAddress());
 
-	for (String idx : commandList) {
-	    try {
+	StringBuilder response = new StringBuilder();
+	SshConnection conn = null;
+	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
+	try {
+	    conn = createSshConnection(device.getHostIpAddress());
+	    for (String idx : commandList) {
+
 		switch (consoleType) {
 		case ARM: {
-		    response = sendReceive(conn, idx, timeOutMilliSecs);
+		    response.append(sendReceive(conn, idx, timeOutMilliSecs)).append(Constants.NEW_LINE);
 		    break;
 		}
 		case ATOM: {
 		    break;
 		}
 		default: {
-		    response = sendReceive(conn, idx, timeOutMilliSecs);
+		    response.append(sendReceive(conn, idx, timeOutMilliSecs)).append(Constants.NEW_LINE);
 		}
 		}
-	    } catch (Exception ex) {
-		LOGGER.error("Exception occured while sending request DUT " + ex);
-		if (null != conn) {
-		    conn.disconnect();
-		}
-		// got exception for some reason try to reconnect and try
-		conn = new SshConnection(device.getHostIpAddress());
+	    }
+	} finally {
+
+	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
+		conn.disconnect();
 	    }
 	}
-	if (null != conn) {
-	    conn.disconnect();
-	}
 
-	LOGGER.info("Received response: " + response);
+	LOGGER.info("Received response: " + response.toString());
 
-	return response;
+	return response.toString();
     }
 
     /**
@@ -379,23 +368,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, Connection deviceConnnection, String command) {
-	LOGGER.info("execute method invoked with device, deviceConnnection, command");
-	String response = "";
-	SshConnection conn = new SshConnection(device.getHostIpAddress());
-
-	try {
-	    response = sendReceive(conn, command, defaultTimeout);
-	} catch (Exception ex) {
-	    LOGGER.error("Exception occured while sending request DUT " + ex);
-	} finally {
-	    if (null != conn) {
-		conn.disconnect();
-	    }
-	}
-
-	LOGGER.info("Received response: " + response);
-
-	return response;
+	return executeCommand(device.getHostIpAddress(), command, defaultTimeout);
     }
 
     /**
@@ -409,11 +382,12 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, Connection deviceConnnection, ExecuteCommandType executeCommandType,
 	    String command) {
-	LOGGER.info("execute method invoked with device, deviceConnnection, CommandType, command");
 	String response = "";
-	SshConnection conn = new SshConnection(device.getHostIpAddress());
+	SshConnection conn = null;
+	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
 
 	try {
+	    conn = createSshConnection(device.getHostIpAddress());
 	    switch (executeCommandType) {
 	    case REV_SSH_DEVICE_VERIFY: {
 		break;
@@ -439,10 +413,9 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    }
 	    }
 
-	} catch (Exception ex) {
-	    LOGGER.error("Exception occured while sending request DUT " + ex);
 	} finally {
 	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
 		conn.disconnect();
 	    }
 	}
@@ -473,23 +446,70 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @param timeOutMilliSecs
      * @param connectionType
      * @return response string
+     * @throws JSchException
+     * @throws InterruptedException
+     * @throws IOException
      */
-    public String execute(String hostIp, String command, long timeOutMilliSecs, String connectionType) {
-	LOGGER.info("execute method invoked with hostIp " + hostIp + " " + command + " " + timeOutMilliSecs);
-	String response = "";
-	SshConnection conn = new SshConnection(hostIp);
 
+    public String execute(String hostIp, String command, long timeOutMilliSecs, String connectionType) {
+	return executeCommand(hostIp, command, timeOutMilliSecs);
+    }
+
+    private String executeCommand(String device, String command, long timeOutMilliSecs) {
+	SshConnection conn = null;
+	String response = "";
+	LOGGER.info("About to create SSH connection to DeviceIP:" + device);
 	try {
+	    conn = createSshConnection(device);
 	    response = sendReceive(conn, command, timeOutMilliSecs);
-	} catch (Exception ex) {
-	    LOGGER.error("Exception occured while sending request DUT " + ex);
 	} finally {
 	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DeviceIP:" + device);
 		conn.disconnect();
 	    }
 	}
 	LOGGER.info("Received response: " + response);
-
 	return response;
     }
+
+    private static SshConnection createSshConnection(String hostIp) {
+	SshConnection connection = null;
+	String sshFailureMesaage = "";
+	String trying = "Trying once more..";
+	LOGGER.info("SSH Host IP : " + hostIp);
+
+	for (int retryCount = 1; retryCount <= SSH_CONNECTION_MAX_ATTEMPT; retryCount++) {
+	    try {
+		LOGGER.info("SSh connection attempet : " + retryCount);
+		connection = new SshConnection(hostIp);
+	    } catch (Exception e) {
+
+		// Trying once more
+
+		if (retryCount == 4) {
+		    trying = "";
+		}
+
+		LOGGER.info("SSh connection attempet : " + retryCount + " failed due to " + e.getMessage() + " for "
+			+ hostIp + ". " + trying);
+		sshFailureMesaage = e.getMessage();
+		connection = null;
+		if (retryCount != SSH_CONNECTION_MAX_ATTEMPT) {
+		    CommonMethods.sleep(Constants.TEN_SECONDS);
+		}
+
+	    }
+
+	    if (null != connection) {
+		break;
+	    }
+	}
+
+	if (null == connection) {
+	    throw new FailedTransitionException(GeneralError.SSH_CONNECTION_FAILURE, sshFailureMesaage);
+	}
+
+	return connection;
+    }
+
 }
