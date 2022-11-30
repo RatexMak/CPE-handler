@@ -17,12 +17,15 @@
 
 package com.connectionproviders.deviceconnectionprovider;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.List;
-
+import com.automatics.constants.AutomaticsConstants;
+import com.automatics.core.SupportedModelHandler;
 import com.automatics.device.Device;
 import com.automatics.device.Dut;
 import com.automatics.error.GeneralError;
@@ -35,6 +38,8 @@ import com.automatics.providers.connection.SshConnection;
 import com.automatics.resource.IServer;
 import com.automatics.rpi.constants.Constants;
 import com.automatics.rpi.utils.CommonMethods;
+import com.automatics.rpi.utils.SshExecutionUtils;
+import com.automatics.utils.AutomaticsPropertyUtility;
 import com.jcraft.jsch.JSchException;
 
 /**
@@ -49,6 +54,20 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger(DeviceConnectionProviderImpl.class);
     private static final long defaultTimeout = 1000;
     private static final int SSH_CONNECTION_MAX_ATTEMPT = 4;
+
+    private int sshConnectMaxAttempt = SSH_CONNECTION_MAX_ATTEMPT;
+
+    public DeviceConnectionProviderImpl() {
+
+	String maxAttempt = AutomaticsPropertyUtility.getProperty("SSH_CONNECTION_MAX_ATTEMPT",
+		Integer.toString(SSH_CONNECTION_MAX_ATTEMPT));
+	try {
+	    sshConnectMaxAttempt = Integer.parseInt(maxAttempt);
+	} catch (Exception e) {
+	    LOGGER.error("Error parsing ssh connection max attempt property: SSH_CONNECTION_MAX_ATTEMPT: {}",
+		    e.getMessage());
+	}
+    }
 
     private static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs) {
 	LOGGER.info("Executing command: " + command);
@@ -101,7 +120,19 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, String command) {
-	return executeCommand(device.getHostIpAddress(), command, defaultTimeout);
+
+	boolean isReverseSSh = false;
+	boolean isSshToATom = false;
+
+	String response = AutomaticsConstants.EMPTY_STRING;
+	if (SupportedModelHandler.isNonRDKDevice(device)) {
+	    response = executeCommandOnNonRdkDevice(device, command, defaultTimeout);
+	} else {
+	    command = formatCommand(device, command, isReverseSSh, isSshToATom);
+	    response = executeCommand(device.getHostIpAddress(), command, defaultTimeout);
+	}
+
+	return response;
     }
 
     /**
@@ -114,17 +145,31 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
     public String execute(Device device, List<String> commandList) {
 	StringBuilder response = new StringBuilder();
 	SshConnection conn = null;
-	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
-	try {
-	    conn = createSshConnection(device.getHostIpAddress());
-	    for (String idx : commandList) {
-		response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
+
+	boolean isReverseSSh = false;
+	boolean isSshToATom = false;
+
+	if (SupportedModelHandler.isNonRDKDevice(device)) {
+	    for (String command : commandList) {
+		LOGGER.info("Executing command on non-RDK device: {} {}", device.getHostMacAddress(), command);
+		response.append(executeCommandOnNonRdkDevice(device, command, defaultTimeout))
+			.append(AutomaticsConstants.NEW_LINE);
 	    }
 
-	} finally {
-	    if (null != conn) {
-		LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
-		conn.disconnect();
+	} else {
+	    LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
+	    try {
+		conn = createSshConnection(device.getHostIpAddress());
+		for (String idx : commandList) {
+		    idx = formatCommand(device, idx, isReverseSSh, isSshToATom);
+		    response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
+		}
+
+	    } finally {
+		if (null != conn) {
+		    LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
+		    conn.disconnect();
+		}
 	    }
 	}
 
@@ -242,76 +287,9 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, String command, DeviceConsoleType consoleType, long timeOutMilliSecs) {
-	String response = "";
-	SshConnection conn = null;
-	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
-	try {
-	    conn = createSshConnection(device.getHostIpAddress());
-	    switch (consoleType) {
-	    case ARM: {
-		response = sendReceive(conn, command, timeOutMilliSecs);
-		break;
-	    }
-	    case ATOM: {
-		LOGGER.info(
-			"Implementation is not available for DeviceConsoleType: " + DeviceConsoleType.ATOM.toString());
-		break;
-	    }
-	    default: {
-		response = sendReceive(conn, command, timeOutMilliSecs);
-	    }
-	    }
-	} finally {
-	    if (null != conn) {
-		LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
-		conn.disconnect();
-	    }
-	}
-	LOGGER.info("Received response: " + response);
-
-	return response;
-    }
-
-    /**
-     * Execute commands in given device console
-     * 
-     * @param device
-     * @param commandList
-     * @param consoleType
-     * @return response string
-     */
-    public String execute(Device device, List<String> commandList, DeviceConsoleType consoleType) {
-
-	StringBuilder response = new StringBuilder();
-	SshConnection conn = null;
-	LOGGER.info("About to create SSH connection to DutIP:" + device.getHostIpAddress());
-	try {
-	    conn = createSshConnection(device.getHostIpAddress());
-	    for (String idx : commandList) {
-
-		switch (consoleType) {
-		case ARM: {
-		    response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
-		    break;
-		}
-		case ATOM: {
-		    break;
-		}
-		default: {
-		    response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
-		}
-		}
-
-	    }
-	} finally {
-	    if (null != conn) {
-		conn.disconnect();
-	    }
-	}
-
-	LOGGER.info("Received response: " + response.toString());
-
-	return response.toString();
+	List<String> commandList = new ArrayList<String>();
+	commandList.add(command);
+	return execute(device, commandList, consoleType, timeOutMilliSecs);
     }
 
     /**
@@ -328,35 +306,60 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
 	StringBuilder response = new StringBuilder();
 	SshConnection conn = null;
-	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
-	try {
-	    conn = createSshConnection(device.getHostIpAddress());
-	    for (String idx : commandList) {
+	boolean isReverseSSh = false;
+	boolean isSshToATom = false;
 
-		switch (consoleType) {
-		case ARM: {
-		    response.append(sendReceive(conn, idx, timeOutMilliSecs)).append(Constants.NEW_LINE);
-		    break;
-		}
-		case ATOM: {
-		    break;
-		}
-		default: {
-		    response.append(sendReceive(conn, idx, timeOutMilliSecs)).append(Constants.NEW_LINE);
-		}
-		}
+	if (SupportedModelHandler.isNonRDKDevice(device)) {
+	    for (String command : commandList) {
+		LOGGER.info("Executing command on non-RDK device: {} {}", device.getHostMacAddress(), command);
+		response.append(executeCommandOnNonRdkDevice(device, command, timeOutMilliSecs))
+			.append(AutomaticsConstants.NEW_LINE);
 	    }
-	} finally {
 
-	    if (null != conn) {
-		LOGGER.info("Closing SSH connection from DeviceIP:" + device.getHostIpAddress());
-		conn.disconnect();
+	} else {
+	    LOGGER.info("About to create SSH connection to DutIP:" + device.getHostIpAddress());
+	    try {
+		conn = createSshConnection(device.getHostIpAddress());
+		for (String idx : commandList) {
+
+		    switch (consoleType) {
+		    case ARM: {
+			idx = formatCommand(device, idx, isReverseSSh, isSshToATom);
+			response.append(sendReceive(conn, idx, timeOutMilliSecs)).append(Constants.NEW_LINE);
+			break;
+		    }
+		    case ATOM: {
+			break;
+		    }
+		    default: {
+			response.append(sendReceive(conn, idx, timeOutMilliSecs)).append(Constants.NEW_LINE);
+		    }
+		    }
+
+		}
+	    } finally {
+		if (null != conn) {
+		    conn.disconnect();
+		}
 	    }
 	}
 
 	LOGGER.info("Received response: " + response.toString());
 
 	return response.toString();
+    }
+
+    /**
+     * Execute commands in given device console
+     * 
+     * @param device
+     * @param commandList
+     * @param consoleType
+     * @return response string
+     */
+    public String execute(Device device, List<String> commandList, DeviceConsoleType consoleType) {
+	return execute(device, commandList, consoleType, defaultTimeout);
+
     }
 
     /**
@@ -368,7 +371,24 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(Device device, Connection deviceConnnection, String command) {
-	return executeCommand(device.getHostIpAddress(), command, defaultTimeout);
+	String response = AutomaticsConstants.EMPTY_STRING;
+	SshConnection conn = null;
+
+	boolean isReverseSSh = false;
+	boolean isSshToATom = false;
+
+	try {
+	    conn = (SshConnection) conn;
+	    command = formatCommand(device, command, isReverseSSh, isSshToATom);
+
+	    response = sendReceive(conn, command, defaultTimeout);
+	} finally {
+	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DeviceIP:" + device);
+		conn.disconnect();
+	    }
+	}
+	return response;
     }
 
     /**
@@ -382,7 +402,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, Connection deviceConnnection, ExecuteCommandType executeCommandType,
 	    String command) {
-	String response = "";
+	String response = AutomaticsConstants.EMPTY_STRING;
 	SshConnection conn = null;
 	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
 
@@ -457,10 +477,12 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
     private String executeCommand(String device, String command, long timeOutMilliSecs) {
 	SshConnection conn = null;
-	String response = "";
+	String response = AutomaticsConstants.EMPTY_STRING;
+
 	LOGGER.info("About to create SSH connection to DeviceIP:" + device);
 	try {
 	    conn = createSshConnection(device);
+
 	    response = sendReceive(conn, command, timeOutMilliSecs);
 	} finally {
 	    if (null != conn) {
@@ -472,29 +494,110 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	return response;
     }
 
-    private static SshConnection createSshConnection(String hostIp) {
+    /**
+     * Executes commands on non-rdk device
+     * 
+     * @param device
+     * @param command
+     * @param timeOutMilliSecs
+     * @return Command execution response
+     */
+    private String executeCommandOnNonRdkDevice(Device device, String command, long timeOutMilliSecs) {
+	SshConnection conn = null;
+	String response = AutomaticsConstants.EMPTY_STRING;
+
+	String hostIpAddress = device.getNatAddress();
+	String username = device.getUsername();
+	String password = device.getPassword();
+	String sshPort = device.getNatPort();
+
+	LOGGER.info("About to create SSH connection to DeviceIP:{}", hostIpAddress);
+	try {
+	    conn = createSshConnectionWithoutRetry(hostIpAddress, sshPort, username, password);
+
+	    command = replaceAnyPipesInCommand(command);
+
+	    LOGGER.info(
+		    "\n(SSH EXECUTION) : Executing command {}  on client : Mac Address [{}] , User Name [{}], IP Address [{}] and Port Number [{}]",
+		    command, device.getHostMacAddress(), username, hostIpAddress, sshPort);
+
+	    command += AutomaticsConstants.NEW_LINE;
+	    response = sendReceiveOnNonRdk(conn, command, timeOutMilliSecs);
+	} catch (Exception e) {
+	    LOGGER.error("[SSH FAILED] : " + hostIpAddress + ":" + sshPort + e.getMessage(), e);
+	    LOGGER.error("[SSH FAILED] : " + hostIpAddress + ":" + sshPort
+		    + " Looks like this device is not properly configured");
+	}
+
+	finally {
+	    if (null != conn) {
+		LOGGER.info("Closing SSH connection from DeviceIP:{}", hostIpAddress);
+		conn.disconnect();
+	    }
+	}
+	LOGGER.info("Received response: {}", response);
+	return response;
+    }
+
+    /**
+     * Creates ssh connection without retry
+     * 
+     * @param hostIp
+     * @param sshPort
+     * @param username
+     * @param password
+     * @return SshConnection instance
+     */
+    private SshConnection createSshConnectionWithoutRetry(String hostIp, String sshPort, String username,
+	    String password) {
+
+	return new SshConnection(hostIp, Integer.parseInt(sshPort), username, password, null);
+
+    }
+
+    /**
+     * Creates ssh connection. Retry if connection failed to create
+     * 
+     * @param hostIp
+     * @return SshConnection instance
+     */
+    private SshConnection createSshConnection(String hostIp) {
+	SshConnection connection = null;
+	connection = createSshConnection(hostIp, sshConnectMaxAttempt);
+
+	return connection;
+    }
+
+    /**
+     * Creates ssh connection. Retry if connection failed to create
+     * 
+     * @param hostIp
+     * @param retryCount
+     * @return SshConnection instance
+     */
+    private SshConnection createSshConnection(String hostIp, int retryCount) {
 	SshConnection connection = null;
 	String sshFailureMesaage = "";
 	String trying = "Trying once more..";
 	LOGGER.info("SSH Host IP : " + hostIp);
 
-	for (int retryCount = 1; retryCount <= SSH_CONNECTION_MAX_ATTEMPT; retryCount++) {
+	for (int retryIndex = 1; retryIndex <= retryCount; retryIndex++) {
 	    try {
-		LOGGER.info("SSh connection attempet : " + retryCount);
+		LOGGER.info("SSh connection attempet : " + retryIndex);
 		connection = new SshConnection(hostIp);
 	    } catch (Exception e) {
 
 		// Trying once more
 
-		if (retryCount == 4) {
+		if (retryIndex == retryCount) {
 		    trying = "";
 		}
 
-		LOGGER.info("SSh connection attempet : " + retryCount + " failed due to " + e.getMessage() + " for "
+		LOGGER.info("SSh connection attempet : " + retryIndex + " failed due to " + e.getMessage() + " for "
 			+ hostIp + ". " + trying);
 		sshFailureMesaage = e.getMessage();
 		connection = null;
-		if (retryCount != SSH_CONNECTION_MAX_ATTEMPT) {
+		if (retryIndex != retryCount) {
 		    CommonMethods.sleep(Constants.TEN_SECONDS);
 		}
 
@@ -510,6 +613,107 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	}
 
 	return connection;
+    }
+
+    /**
+     * 
+     * WHen pip symbol is present, at times the ssh connection is not able to read the about. To resolve this issue, pip
+     * is being replaced with another operator which has same capability.But their internal operation is different that
+     * of pip
+     * 
+     * @param command
+     * @return
+     */
+    private static String replaceAnyPipesInCommand(String command) {
+	boolean isAndPresent = false;
+
+	StringBuffer commandToExecute = new StringBuffer();
+	if (CommonMethods.isNotNull(command) && command.contains("|")) {
+	    if (command.lastIndexOf("&") == command.length() - 1) {
+		isAndPresent = true;
+		command = command.substring(0, command.length() - 2);
+	    }
+	    String[] commands = command.split("\\|");
+	    int numberOfCommands = 0;
+	    for (int i = commands.length - 1; i >= 0; i--) {
+		numberOfCommands++;
+		commandToExecute.append(commands[i]);
+		if (i != commands.length - 1) {
+		    commandToExecute.append(")");
+		}
+		if (i != 0) {
+		    commandToExecute.append("< <");
+		    commandToExecute.append("(");
+		    if (commands.length - numberOfCommands > 1) {
+			commandToExecute.append("(");
+		    }
+		}
+	    }
+	    if (commands.length - 2 > 0) {
+		for (int j = 0; j < commands.length - 2; j++) {
+		    commandToExecute.append(")");
+		}
+	    }
+	    if (isAndPresent) {
+		commandToExecute.append(" &");
+	    }
+	} else {
+	    commandToExecute.append(command);
+	}
+	return commandToExecute.toString();
+    }
+
+    /**
+     * Send command to non-rdk device
+     * 
+     * @param conn
+     * @param command
+     * @param timeOutMilliSecs
+     * @return
+     */
+    private String sendReceiveOnNonRdk(SshConnection conn, String command, long timeOutMilliSecs) {
+	LOGGER.info("Executing command: {}", command);
+	String response = AutomaticsConstants.EMPTY_STRING;
+	String timeOutInString = AutomaticsPropertyUtility.getProperty(Constants.PROPS_NON_RDK_RESP_WAIT_TIME_MILLISEC);
+	if (CommonMethods.isNotNull(timeOutInString)) {
+	    try {
+		timeOutMilliSecs = Integer.parseInt(timeOutInString);
+		LOGGER.info("Using configured response timeout: {}", timeOutMilliSecs);
+
+	    } catch (NumberFormatException e) {
+		LOGGER.error("Error parsing value for field: {}, {}", Constants.PROPS_NON_RDK_RESP_WAIT_TIME_MILLISEC,
+			e.getMessage());
+	    }
+	}
+	try {
+	    conn.sendCommand(command, (int) (timeOutMilliSecs));
+	    response = conn.getSettopResponse(timeOutMilliSecs);
+
+	    LOGGER.info("\n<===========================  RESPONSE =======================> \n" + response
+		    + "\n<=============================================================>");
+	    return response;
+	} catch (Exception ex) {
+	    LOGGER.error("Exception occurred while executing the command ", ex);
+	    throw new FailedTransitionException(GeneralError.SSH_CONNECTION_FAILURE, ex);
+	}
+
+    }
+
+    private String formatCommand(Dut dut, String command, boolean isReverseSSh, boolean isSshToATom) {
+	StringBuilder formattedCommand = new StringBuilder();
+
+	if (!isReverseSSh && !isSshToATom) {
+	    if (command.contains("awk") || SshExecutionUtils.isSedCommandPresent(command)) {
+		formattedCommand.append("\"").append(command).append("\"").append(AutomaticsConstants.NEW_LINE);
+	    } else {
+
+		formattedCommand.append("\"").append(command).append("\"").append(AutomaticsConstants.NEW_LINE);
+	    }
+
+	}
+
+	return formattedCommand.toString();
+
     }
 
 }

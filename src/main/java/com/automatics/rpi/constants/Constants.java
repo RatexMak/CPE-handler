@@ -22,4 +22,9 @@ public class Constants {
     public static String END_OF_SSH_CONNECTION_PRIVACY_MESSAGE = "law enforcement.";
     public static final long TEN_SECONDS = 10000;
     public static final String NEW_LINE = "\n";
+    
+    /**
+     * Property to keep command execution response wait time for non-RDK devices during ssh connection
+     */
+    public static final String PROPS_NON_RDK_RESP_WAIT_TIME_MILLISEC = "nonrdk.resp.wait.time.millisecs";
 }
