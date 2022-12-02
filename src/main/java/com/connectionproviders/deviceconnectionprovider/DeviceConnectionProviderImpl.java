@@ -38,7 +38,6 @@ import com.automatics.providers.connection.SshConnection;
 import com.automatics.resource.IServer;
 import com.automatics.rpi.constants.Constants;
 import com.automatics.rpi.utils.CommonMethods;
-import com.automatics.rpi.utils.SshExecutionUtils;
 import com.automatics.utils.AutomaticsPropertyUtility;
 import com.jcraft.jsch.JSchException;
 
@@ -121,14 +120,10 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      */
     public String execute(Device device, String command) {
 
-	boolean isReverseSSh = false;
-	boolean isSshToATom = false;
-
 	String response = AutomaticsConstants.EMPTY_STRING;
 	if (SupportedModelHandler.isNonRDKDevice(device)) {
 	    response = executeCommandOnNonRdkDevice(device, command, defaultTimeout);
 	} else {
-	    command = formatCommand(device, command, isReverseSSh, isSshToATom);
 	    response = executeCommand(device.getHostIpAddress(), command, defaultTimeout);
 	}
 
@@ -146,9 +141,6 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	StringBuilder response = new StringBuilder();
 	SshConnection conn = null;
 
-	boolean isReverseSSh = false;
-	boolean isSshToATom = false;
-
 	if (SupportedModelHandler.isNonRDKDevice(device)) {
 	    for (String command : commandList) {
 		LOGGER.info("Executing command on non-RDK device: {} {}", device.getHostMacAddress(), command);
@@ -161,7 +153,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    try {
 		conn = createSshConnection(device.getHostIpAddress());
 		for (String idx : commandList) {
-		    idx = formatCommand(device, idx, isReverseSSh, isSshToATom);
+
 		    response.append(sendReceive(conn, idx, defaultTimeout)).append(Constants.NEW_LINE);
 		}
 
@@ -306,8 +298,6 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
 	StringBuilder response = new StringBuilder();
 	SshConnection conn = null;
-	boolean isReverseSSh = false;
-	boolean isSshToATom = false;
 
 	if (SupportedModelHandler.isNonRDKDevice(device)) {
 	    for (String command : commandList) {
@@ -324,7 +314,6 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
 		    switch (consoleType) {
 		    case ARM: {
-			idx = formatCommand(device, idx, isReverseSSh, isSshToATom);
 			response.append(sendReceive(conn, idx, timeOutMilliSecs)).append(Constants.NEW_LINE);
 			break;
 		    }
@@ -374,12 +363,8 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	String response = AutomaticsConstants.EMPTY_STRING;
 	SshConnection conn = null;
 
-	boolean isReverseSSh = false;
-	boolean isSshToATom = false;
-
 	try {
 	    conn = (SshConnection) conn;
-	    command = formatCommand(device, command, isReverseSSh, isSshToATom);
 
 	    response = sendReceive(conn, command, defaultTimeout);
 	} finally {
@@ -696,23 +681,6 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    LOGGER.error("Exception occurred while executing the command ", ex);
 	    throw new FailedTransitionException(GeneralError.SSH_CONNECTION_FAILURE, ex);
 	}
-
-    }
-
-    private String formatCommand(Dut dut, String command, boolean isReverseSSh, boolean isSshToATom) {
-	StringBuilder formattedCommand = new StringBuilder();
-
-	if (!isReverseSSh && !isSshToATom) {
-	    if (command.contains("awk") || SshExecutionUtils.isSedCommandPresent(command)) {
-		formattedCommand.append("\"").append(command).append("\"").append(AutomaticsConstants.NEW_LINE);
-	    } else {
-
-		formattedCommand.append("\"").append(command).append("\"").append(AutomaticsConstants.NEW_LINE);
-	    }
-
-	}
-
-	return formattedCommand.toString();
 
     }
 
