@@ -68,7 +68,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	}
     }
 
-    private static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs) {
+    public static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs) {
 	LOGGER.info("Executing command: " + command);
 	String response = "";
 	try {
