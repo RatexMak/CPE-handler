@@ -70,7 +70,20 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
     public static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs) {
 	LOGGER.info("Executing command: " + command);
-	String response = "";
+	String response = AutomaticsConstants.EMPTY_STRING;
+
+	String timeOutInString = AutomaticsPropertyUtility.getProperty(Constants.PROPS_RDK_RESP_WAIT_TIME_MILLISEC);
+	if (CommonMethods.isNotNull(timeOutInString)) {
+	    try {
+		timeOutMilliSecs = Integer.parseInt(timeOutInString);
+		LOGGER.info("Using configured response timeout: {}", timeOutMilliSecs);
+
+	    } catch (NumberFormatException e) {
+		LOGGER.error("Error parsing value for field: {}, {}", Constants.PROPS_RDK_RESP_WAIT_TIME_MILLISEC,
+			e.getMessage());
+	    }
+	}
+
 	try {
 	    conn.send(command, (int) (timeOutMilliSecs));
 	    response = conn.getSettopResponse(timeOutMilliSecs);
