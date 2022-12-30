@@ -23,7 +23,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import com.automatics.tap.AutomaticsTapApi;
 import com.automatics.constants.AutomaticsConstants;
 import com.automatics.core.SupportedModelHandler;
 import com.automatics.device.Device;
@@ -40,7 +40,7 @@ import com.automatics.rpi.constants.Constants;
 import com.automatics.rpi.utils.CommonMethods;
 import com.automatics.utils.AutomaticsPropertyUtility;
 import com.jcraft.jsch.JSchException;
-
+import com.automatics.rpi.utils.ReverseSshConnectionHandler;
 /**
  * The class provides Device connection provider implementation as defined by the interface class
  * DeviceConnectionProvider. The implementation of execute methods with different overloaded arguments will establish an
@@ -56,7 +56,20 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
     private int sshConnectMaxAttempt = SSH_CONNECTION_MAX_ATTEMPT;
 
+     /** Holds the IP Address of jump server for communication with STB. */
+    private String jumpServerIp = null;
+
+    /** Holds the IPv6 Address of jump server for communication with STB. */
+    private String jumpServerIPv6 = null;
+
     public DeviceConnectionProviderImpl() {
+
+        jumpServerIp = AutomaticsPropertyUtility.getProperty(Constants.PROP_KEY_JUMP_SERVER_IP_ADDRESS,"");
+	jumpServerIPv6 = jumpServerIp;
+
+
+	LOGGER.info("JUMP SERVER IPV4 OBTAINED AS - " + jumpServerIp);
+	LOGGER.info("JUMP SERVER IPV6 OBTAINED AS - " + jumpServerIPv6);
 
 	String maxAttempt = AutomaticsPropertyUtility.getProperty("SSH_CONNECTION_MAX_ATTEMPT",
 		Integer.toString(SSH_CONNECTION_MAX_ATTEMPT));
@@ -66,6 +79,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	    LOGGER.error("Error parsing ssh connection max attempt property: SSH_CONNECTION_MAX_ATTEMPT: {}",
 		    e.getMessage());
 	}
+
     }
 
     public static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs) {
@@ -442,6 +456,60 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
 	return response;
     }
+	
+	
+    /**
+     * Method establish a SSH connection to the host using the user name.
+     *
+     * @param userName
+     *            The SSH user name.
+     * @param password
+     *            Password for establishing the SSH connection.
+     * @param hostIp
+     *            The host name to which connection to be established.
+     *
+     * @return The SSH connection.
+     */
+    public static SshConnection getSshConnection(String userName, String password, String hostIp) {
+	SshConnection connection = null;
+	String sshFailureMesaage = "";
+	String trying = "trying for";
+	LOGGER.debug("SSH Host IP : " + hostIp);
+
+	for (int retryCount = 1; retryCount <= SSH_CONNECTION_MAX_ATTEMPT; retryCount++) {
+	    try {
+		LOGGER.debug("SSh connection attempet : " + retryCount);
+		connection = new SshConnection(userName, password, hostIp);
+	    } catch (Exception e) {
+
+		// Trying once more
+
+		if (SSH_CONNECTION_MAX_ATTEMPT == retryCount) {
+		    trying = "";
+		}
+
+		LOGGER.info("SSh connection attempet : " + retryCount + " failed due to " + e.getMessage() + " for "
+			+ hostIp + ". " + trying);
+		sshFailureMesaage = e.getMessage();
+		connection = null;
+		if (SSH_CONNECTION_MAX_ATTEMPT != retryCount) {
+		    CommonMethods.sleep(Constants.TEN_SECONDS);
+		}
+
+	    }
+
+	    if (null != connection) {
+		break;
+	    }
+	}
+
+	if (null == connection) {
+	    throw new FailedTransitionException(GeneralError.SSH_CONNECTION_FAILURE, sshFailureMesaage);
+	}
+
+	return connection;
+    }
+
 
     /**
      * Execute commands on given host
@@ -452,8 +520,42 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      * @return response string
      */
     public String execute(IServer hostDetails, List<String> commands, long timeOutMilliSecs) {
-	LOGGER.error("execute method hostDetails, commandslist, timeout is not implemented");
-	return null;
+	StringBuilder response = new StringBuilder();
+	SshConnection sshConnection = null;
+	
+
+	try {
+
+	    if ("localhost".equals(hostDetails.getHostIp())) {
+		String jumpServer = jumpServerIp;
+		LOGGER.info("Host Ip is localhost. Hence re-routing the execution to Jump Server - {}", jumpServer);
+		sshConnection = createSshConnection(jumpServer);
+	    } else {
+		LOGGER.info("Creating ssh connection to server: {}", hostDetails.getHostIp());
+		sshConnection = getSshConnection(hostDetails.getUserId(), hostDetails.getPassword(),
+			hostDetails.getHostIp());
+	    }
+
+	    LOGGER.info("Success fully established the SSH connection with server.");
+
+	    for (String command : commands) {
+		LOGGER.info("About to execute the command : " + command);
+		response.append(sendReceive(sshConnection, command, 50000)).append(Constants.NEW_LINE);
+	    }
+
+	} catch (Exception e) {
+	    LOGGER.error("Exception occured while executing command: " + hostDetails + " " + e.getMessage());
+	} finally {
+
+	    if (null != sshConnection) {
+		sshConnection.disconnect();
+	    }
+	}
+
+	LOGGER.info("Successfully executed commands  = \n " + response.toString());
+
+	return response.toString();
+
     }
 
     /**
