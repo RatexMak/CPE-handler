@@ -17,13 +17,15 @@
 
 package com.connectionproviders.deviceconnectionprovider;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.automatics.tap.AutomaticsTapApi;
+
 import com.automatics.constants.AutomaticsConstants;
 import com.automatics.core.SupportedModelHandler;
 import com.automatics.device.Device;
@@ -40,7 +42,7 @@ import com.automatics.rpi.constants.Constants;
 import com.automatics.rpi.utils.CommonMethods;
 import com.automatics.utils.AutomaticsPropertyUtility;
 import com.jcraft.jsch.JSchException;
-import com.automatics.rpi.utils.ReverseSshConnectionHandler;
+
 /**
  * The class provides Device connection provider implementation as defined by the interface class
  * DeviceConnectionProvider. The implementation of execute methods with different overloaded arguments will establish an
@@ -56,20 +58,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
     private int sshConnectMaxAttempt = SSH_CONNECTION_MAX_ATTEMPT;
 
-     /** Holds the IP Address of jump server for communication with STB. */
-    private String jumpServerIp = null;
-
-    /** Holds the IPv6 Address of jump server for communication with STB. */
-    private String jumpServerIPv6 = null;
-
     public DeviceConnectionProviderImpl() {
-
-        jumpServerIp = AutomaticsPropertyUtility.getProperty(Constants.PROP_KEY_JUMP_SERVER_IP_ADDRESS,"");
-	jumpServerIPv6 = jumpServerIp;
-
-
-	LOGGER.info("JUMP SERVER IPV4 OBTAINED AS - " + jumpServerIp);
-	LOGGER.info("JUMP SERVER IPV6 OBTAINED AS - " + jumpServerIPv6);
 
 	String maxAttempt = AutomaticsPropertyUtility.getProperty("SSH_CONNECTION_MAX_ATTEMPT",
 		Integer.toString(SSH_CONNECTION_MAX_ATTEMPT));
@@ -456,8 +445,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
 	return response;
     }
-	
-	
+
     /**
      * Method establish a SSH connection to the host using the user name.
      *
@@ -470,7 +458,7 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
      *
      * @return The SSH connection.
      */
-    public static SshConnection getSshConnection(String userName, String password, String hostIp) {
+    private static SshConnection getSshConnection(String userName, String password, String hostIp) {
 	SshConnection connection = null;
 	String sshFailureMesaage = "";
 	String trying = "trying for";
@@ -510,7 +498,6 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	return connection;
     }
 
-
     /**
      * Execute commands on given host
      * 
@@ -522,25 +509,24 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
     public String execute(IServer hostDetails, List<String> commands, long timeOutMilliSecs) {
 	StringBuilder response = new StringBuilder();
 	SshConnection sshConnection = null;
-	
 
 	try {
 
 	    if ("localhost".equals(hostDetails.getHostIp())) {
-		String jumpServer = jumpServerIp;
-		LOGGER.info("Host Ip is localhost. Hence re-routing the execution to Jump Server - {}", jumpServer);
-		sshConnection = createSshConnection(jumpServer);
+		for (String command : commands) {
+		    LOGGER.info("About to execute the command : " + command);
+		    response.append(execute(command)).append(Constants.NEW_LINE);
+		}
 	    } else {
 		LOGGER.info("Creating ssh connection to server: {}", hostDetails.getHostIp());
 		sshConnection = getSshConnection(hostDetails.getUserId(), hostDetails.getPassword(),
 			hostDetails.getHostIp());
-	    }
+		LOGGER.info("Success fully established the SSH connection with server.");
 
-	    LOGGER.info("Success fully established the SSH connection with server.");
-
-	    for (String command : commands) {
-		LOGGER.info("About to execute the command : " + command);
-		response.append(sendReceive(sshConnection, command, 50000)).append(Constants.NEW_LINE);
+		for (String command : commands) {
+		    LOGGER.info("About to execute the command : " + command);
+		    response.append(sendReceive(sshConnection, command, 50000)).append(Constants.NEW_LINE);
+		}
 	    }
 
 	} catch (Exception e) {
@@ -556,6 +542,39 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
 	return response.toString();
 
+    }
+
+    /**
+     * Execute command on localhost
+     *
+     * @param command
+     * @return response string 
+     */
+    public String execute(String command) {
+	String response = null;
+	ProcessBuilder processBuilder = new ProcessBuilder();
+	processBuilder.command("bash", "-c", command);
+
+	try {
+	    LOGGER.info("Command execution Started ....");
+	    Process process = processBuilder.start();
+
+	    BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+
+	    StringBuffer sb = new StringBuffer();
+	    String line;
+	    while ((line = reader.readLine()) != null) {
+		sb.append(line + "\n");
+	    }
+	    response = sb.toString();
+	    int exitCode = process.waitFor();
+	    if (exitCode == 0) {
+		LOGGER.info("Command execution Completed");
+	    }
+	} catch (IOException | InterruptedException e) {
+	    LOGGER.error("Exception occured while executing commands on localhost :  " + e.getMessage());
+	}
+	return response;
     }
 
     /**
