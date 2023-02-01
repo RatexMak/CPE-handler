@@ -53,13 +53,23 @@ import com.jcraft.jsch.JSchException;
 public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DeviceConnectionProviderImpl.class);
-    private static final long defaultTimeout = 1000;
+    private static long defaultTimeout = 1000;
     private static final int SSH_CONNECTION_MAX_ATTEMPT = 4;
 
     private int sshConnectMaxAttempt = SSH_CONNECTION_MAX_ATTEMPT;
 
     public DeviceConnectionProviderImpl() {
 
+	String timeOutInString = AutomaticsPropertyUtility.getProperty(Constants.PROPS_RDK_RESP_WAIT_TIME_MILLISEC);
+	if (CommonMethods.isNotNull(timeOutInString)) {
+	    try {
+		defaultTimeout = Long.parseLong(timeOutInString);
+
+	    } catch (NumberFormatException e) {
+		LOGGER.error("Error parsing value for field: {}, {}", Constants.PROPS_RDK_RESP_WAIT_TIME_MILLISEC,
+			e.getMessage());
+	    }
+	}
 	String maxAttempt = AutomaticsPropertyUtility.getProperty("SSH_CONNECTION_MAX_ATTEMPT",
 		Integer.toString(SSH_CONNECTION_MAX_ATTEMPT));
 	try {
@@ -74,18 +84,6 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
     public static String sendReceive(SshConnection conn, String command, long timeOutMilliSecs) {
 	LOGGER.info("Executing command: " + command);
 	String response = AutomaticsConstants.EMPTY_STRING;
-
-	String timeOutInString = AutomaticsPropertyUtility.getProperty(Constants.PROPS_RDK_RESP_WAIT_TIME_MILLISEC);
-	if (CommonMethods.isNotNull(timeOutInString)) {
-	    try {
-		timeOutMilliSecs = Integer.parseInt(timeOutInString);
-		LOGGER.info("Using configured response timeout: {}", timeOutMilliSecs);
-
-	    } catch (NumberFormatException e) {
-		LOGGER.error("Error parsing value for field: {}, {}", Constants.PROPS_RDK_RESP_WAIT_TIME_MILLISEC,
-			e.getMessage());
-	    }
-	}
 
 	try {
 	    conn.send(command, (int) (timeOutMilliSecs));
