@@ -20,7 +20,7 @@
 	 <!-- Implementation of DeviceProvider  -->
 
 	<!-- Implementation of  DeviceAccessValidator -->
-	<bean id="deviceAccessValidator" class="com.automatics.rpi.provider.accessvalidator.DeviceAccessValidatorImplementation" lazy-init="true"/>
+	<bean id="deviceAccessValidator" class="com.automatics.zte.provider.accessvalidator.DeviceAccessValidatorImplementation" lazy-init="true"/>
 	
 	<!-- Implementation of SnmpDataProvider -->
 	<bean id="snmpDataProvider" class="com.snmp.SnmpDataProviderImpl" lazy-init="true"/>
