@@ -38,8 +38,8 @@ import com.automatics.providers.connection.DeviceConsoleType;
 import com.automatics.providers.connection.ExecuteCommandType;
 import com.automatics.providers.connection.SshConnection;
 import com.automatics.resource.IServer;
-import com.automatics.rpi.constants.Constants;
-import com.automatics.rpi.utils.CommonMethods;
+import com.automatics.zte.constants.Constants;
+import com.automatics.zte.utils.CommonMethods;
 import com.automatics.utils.AutomaticsPropertyUtility;
 import com.jcraft.jsch.JSchException;
 
