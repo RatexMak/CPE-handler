@@ -631,8 +631,8 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	String password = device.getPassword();
 	String sshPort = device.getNatPort();
 	LOGGER.info("++++++++++++++++++++++++++++++++ DEBUG execute ++++++++++++++++++++++++++++++++");
-	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
-	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getNatAddress());
+	LOGGER.info("device.getHostIpAddress: " + device.getHostIpAddress());
+	LOGGER.info("device.getNatAddress: " + device.getNatAddress());
 	LOGGER.info("++++++++++++++++++++++++++++++++ DEBUG execute ++++++++++++++++++++++++++++++++");
 	LOGGER.info("About to create SSH connection to DeviceIP:{}", hostIpAddress);
 	try {
