@@ -38,8 +38,8 @@ import com.automatics.providers.connection.DeviceConsoleType;
 import com.automatics.providers.connection.ExecuteCommandType;
 import com.automatics.providers.connection.SshConnection;
 import com.automatics.resource.IServer;
-import com.automatics.zte.constants.Constants;
-import com.automatics.zte.utils.CommonMethods;
+import com.automatics.rpi.constants.Constants;
+import com.automatics.rpi.utils.CommonMethods;
 import com.automatics.utils.AutomaticsPropertyUtility;
 import com.jcraft.jsch.JSchException;
 
@@ -136,6 +136,9 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 
 	String response = AutomaticsConstants.EMPTY_STRING;
 	if (SupportedModelHandler.isNonRDKDevice(device)) {
+		LOGGER.info("============================ Debug ============================");
+		LOGGER.info("device IP Address: "+device.getHostIpAddress());
+		LOGGER.info("============================ Debug ============================");
 	    response = executeCommandOnNonRdkDevice(device, command, defaultTimeout);
 	} else {
 	    response = executeCommand(device.getHostIpAddress(), command, defaultTimeout);
@@ -627,7 +630,10 @@ public class DeviceConnectionProviderImpl implements DeviceConnectionProvider {
 	String username = device.getUsername();
 	String password = device.getPassword();
 	String sshPort = device.getNatPort();
-
+	LOGGER.info("++++++++++++++++++++++++++++++++ DEBUG execute ++++++++++++++++++++++++++++++++");
+	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getHostIpAddress());
+	LOGGER.info("About to create SSH connection to DeviceIP:" + device.getNatAddress());
+	LOGGER.info("++++++++++++++++++++++++++++++++ DEBUG execute ++++++++++++++++++++++++++++++++");
 	LOGGER.info("About to create SSH connection to DeviceIP:{}", hostIpAddress);
 	try {
 	    conn = createSshConnectionWithoutRetry(hostIpAddress, sshPort, username, password);
